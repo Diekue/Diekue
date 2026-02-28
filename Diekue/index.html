@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dicionário Profissional</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #f4f4f4;
+            background-image: url('Diekue.jpg'); 
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+            background-size: cover;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container-box {
+            background: rgba(255, 255, 255, 0.9); 
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0px 10px 25px rgba(0,0,0,0.2);
+            margin-top: 50px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .suggestion {
+            background: #fff;
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            color: #333;
+        }
+
+        .suggestion:hover { background: #f1f1f1; }
+
+        .audio-btn {
+            background: #212529;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            margin-top: 20px;
+            transition: 0.3s;
+        }
+
+        .audio-btn:hover { background: #000; }
+    </style>
+</head>
+<body>
+
+<div class="container d-flex justify-content-center">
+    <div class="container-box">
+        <h3 class="text-center mb-4">Dicionário Digital</h3>
+        
+        <div class="mb-3">
+            <label class="form-label fw-bold">Digite a palavra:</label>
+            <input type="text" class="form-control" id="wordInput" placeholder="Ex: abafar..." autocomplete="off">
+            <div id="suggestions" class="mt-1 shadow-sm"></div>
+        </div>
+
+        <div id="resultArea" class="text-center mt-4">
+            <div id="definition" class="h4 fw-bold text-dark"></div>
+            <div id="audioPlayer"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSUi36hIOq4k8Vd6YgmgOzAje8qoW7ks3aMrTb-jVwn6fa-WUeebTJWwUyOs5m0BoYwE4-lJ0piOX2L/pub?output=csv';
+    
+    let dictionaryData = [];
+
+    async function loadData() {
+        try {
+            const response = await fetch(SHEET_URL);
+            const csvText = await response.text();
+            
+            const rows = csvText.split(/\r?\n/).filter(r => r.trim() !== "");
+            const separator = rows[0].includes(';') ? ';' : ',';
+            
+            dictionaryData = rows.slice(1).map(row => {
+                const cols = row.split(separator);
+                return {
+                    pt: cols[0]?.replace(/"/g, '').trim() || "",
+                    id: cols[1]?.replace(/"/g, '').trim() || "",
+                    // Se o link direto estiver na Coluna D, use cols[3]. Se estiver na C, use cols[2]
+                    audio: (cols[3] || cols[2])?.replace(/"/g, '').trim() || "" 
+                };
+            }).filter(item => item.pt || item.id);
+
+            console.log("Dicionário carregado com sucesso!");
+        } catch (err) {
+            console.error("Erro ao carregar planilha:", err);
+        }
+    }
+
+    function handleSearch() {
+        const input = document.getElementById('wordInput');
+        const term = input.value.toLowerCase().trim();
+        const definitionEl = document.getElementById('definition');
+        const audioEl = document.getElementById('audioPlayer');
+        const suggestEl = document.getElementById('suggestions');
+
+        if (term.length === 0) {
+            definitionEl.textContent = "";
+            audioEl.innerHTML = "";
+            suggestEl.innerHTML = "";
+            return;
+        }
+
+        const matches = dictionaryData.filter(i => 
+            i.pt.toLowerCase().startsWith(term) || 
+            i.id.toLowerCase().startsWith(term)
+        );
+
+        suggestEl.innerHTML = "";
+        matches.slice(0, 5).forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'suggestion';
+            div.textContent = `${m.pt} ➔ ${m.id}`; 
+            div.onclick = () => {
+                input.value = m.pt;
+                showResult(m);
+            };
+            suggestEl.appendChild(div);
+        });
+
+        const exactMatch = dictionaryData.find(i => 
+            i.pt.toLowerCase() === term || 
+            i.id.toLowerCase() === term
+        );
+
+        if (exactMatch) {
+            showResult(exactMatch);
+        } else {
+            definitionEl.textContent = "";
+            audioEl.innerHTML = "";
+        }
+    }
+
+    function showResult(item) {
+        const definitionEl = document.getElementById('definition');
+        const audioEl = document.getElementById('audioPlayer');
+        const suggestEl = document.getElementById('suggestions');
+
+        definitionEl.innerHTML = `<span style="color: #007bff">${item.pt}</span> = <span style="color: #28a745">${item.id}</span>`;
+        suggestEl.innerHTML = ""; 
+
+        if (item.audio && item.audio.length > 10) {
+            audioEl.innerHTML = `
+                <button class="audio-btn" onclick="tocarAudio('${item.audio}')">
+                    <i class="bi bi-volume-up-fill"></i> Ouvir Pronúncia
+                </button>`;
+        } else {
+            audioEl.innerHTML = "<small class='text-muted'>Sem áudio</small>";
+        }
+    }
+
+    function tocarAudio(url) {
+        console.log("Iniciando áudio:", url);
+        const audio = new Audio(url);
+        audio.play().catch(e => {
+            console.error("Erro ao reproduzir:", e);
+            alert("Não foi possível tocar o áudio. Verifique se o link na planilha é um 'Link Direto' e se está público.");
+        });
+    }
+
+    // Bloqueios
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.onkeydown = e => {
+        if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) return false;
+    };
+
+    window.onload = () => {
+        loadData();
+        document.getElementById('wordInput').addEventListener('input', handleSearch);
+    };
+</script>
+</body>
+</html>
